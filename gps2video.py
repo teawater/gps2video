@@ -1,7 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import os, ConfigParser, gpxpy, math, urllib2, cv2
+import os, ConfigParser, gpxpy, math, urllib2, subprocess
+from PIL import Image, ImageDraw
 
 class gps2video_cf(ConfigParser.ConfigParser):
 	def __init__(self, config_file_path):
@@ -68,18 +69,12 @@ class gps_class:
 					if self.min_longitude == None or point.longitude < self.min_longitude:
 						self.min_longitude = point.longitude
 
-	def write_video(self, m):
-		vw = cv2.VideoWriter(os.path.join(self.cf.output_dir, 'v.avi'),
-				     fourcc = cv2.cv.CV_FOURCC('D','I', 'V','X'),
-				     fps = 36,
-				     frameSize = (m.width, m.height))
+	def write_video(self, m, pipe):
 		for track in self.rec.tracks:
 			for segment in track.segments:
 				for point in segment.points:
-					m.write_video(vw, point.latitude, point.longitude)
-		m.write_video_last(vw)
-		vw.release()
-		print "视频生成成功：", os.path.join(self.cf.output_dir, 'v.avi')
+					m.write_video(pipe, point.latitude, point.longitude)
+		m.write_video_last(pipe)
 
 class map_class:
 	def __init__(self, cf, gps):
@@ -183,20 +178,21 @@ class map_class:
 		fp.close()
 		ufp.close()
 
-		self.img = cv2.imread(self.pic)
+		self.img = Image.open(self.pic)
+		self.draw = ImageDraw.Draw(self.img)
 
-	def write_video(self, vw, latitude, longitude):
+	def write_video(self, pipe, latitude, longitude):
 		x, y = self.gps_to_pixel(latitude, longitude)
 		if self.prev_x != None:
-			cv2.line(self.img, (self.prev_x, self.prev_y), (x, y), (255, 255, 255), 3, lineType=cv2.CV_AA)
-		cv2.circle(self.img, (x, y), 0, (255, 255, 255), 3, lineType=cv2.CV_AA)
-		vw.write(self.img)
+			self.draw.line([(self.prev_x, self.prev_y),
+				        (x, y)], fill=255, width = 3)
+		self.img.save(pipe.stdin, 'PNG')
 		self.prev_x = x
 		self.prev_y = y
 
-	def write_video_last(self, vw):
-		for i in range(36 * 2):
-			vw.write(self.img)
+	def write_video_last(self, pipe):
+		for i in range(36 * 4):
+			self.img.save(pipe.stdin, 'PNG')
 
 def gps2video(config_file_path="config.ini"):
 	#配置对象cf初始化
@@ -217,7 +213,21 @@ def gps2video(config_file_path="config.ini"):
 	#下载地图
 	m.get_map()
 
-	gps.write_video(m)
+	#生成视频
+	ffmpeg = cf.get("required", "ffmpeg")
+	ffmpeg_cmd = [ffmpeg,
+		      '-f', 'image2pipe',
+		      '-vcodec', 'png',
+		      '-r', '36',  # FPS
+		      '-i', '-',  # Indicated input comes from pipe 
+		      '-q:v', '1',
+		      '-y', #Overwrite old file
+		      os.path.join(cf.output_dir, 'v.mp4')]
+	pipe = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE)
+	gps.write_video(m, pipe)
+	pipe.stdin.close()
+	pipe.wait()
+	print "视频生成成功：", os.path.join(cf.output_dir, 'v.mp4')
 
 if __name__ == "__main__":
 	gps2video()
