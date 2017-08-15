@@ -19,6 +19,11 @@ class gps2video_cf(ConfigParser.ConfigParser):
 			os.mkdir(self.output_dir)
 		print "输出目录设置为:" + self.output_dir
 
+                self.speed = 1
+                if self.has_option("optional", "speed"):
+                    self.speed = self.getint("optional", "speed")
+                print ("绘制速率为: %dx") % self.speed
+
 	def __del__(self):
 		if hasattr(self, 'cfp'):
 			self.cfp.close()
@@ -69,11 +74,13 @@ class gps_class:
 					if self.min_longitude == None or point.longitude < self.min_longitude:
 						self.min_longitude = point.longitude
 
-	def write_video(self, m, pipe):
+	def write_video(self, m, pipe, speed=1):
+                step=0
 		for track in self.rec.tracks:
 			for segment in track.segments:
 				for point in segment.points:
-					m.write_video(pipe, point.latitude, point.longitude)
+					m.write_video(pipe, point.latitude, point.longitude, step%speed == 0)
+                                        step = step+1
 		m.write_video_last(pipe)
 
 class map_class:
@@ -181,12 +188,13 @@ class map_class:
 		self.img = Image.open(self.pic)
 		self.draw = ImageDraw.Draw(self.img)
 
-	def write_video(self, pipe, latitude, longitude):
+	def write_video(self, pipe, latitude, longitude, step=True):
 		x, y = self.gps_to_pixel(latitude, longitude)
 		if self.prev_x != None:
 			self.draw.line([(self.prev_x, self.prev_y),
 				        (x, y)], fill=255, width = 3)
-		self.img.save(pipe.stdin, 'PNG')
+                if step:
+		    self.img.save(pipe.stdin, 'PNG')
 		self.prev_x = x
 		self.prev_y = y
 
@@ -225,7 +233,7 @@ def gps2video(config_file_path="config.ini"):
 		      '-y', #Overwrite old file
 		      os.path.join(cf.output_dir, 'v.mp4')]
 	pipe = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE)
-	gps.write_video(m, pipe)
+	gps.write_video(m, pipe, cf.speed)
 	pipe.stdin.close()
 	pipe.wait()
 	print "视频生成成功：", os.path.join(cf.output_dir, 'v.mp4')
