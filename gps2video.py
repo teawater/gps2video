@@ -221,6 +221,7 @@ def gps2video(config_file_path="config.ini"):
 		      '-r', '36',  # FPS
 		      '-i', '-',  # Indicated input comes from pipe 
 		      '-q:v', '1',
+		      '-c:v', 'mpeg4',
 		      '-y', #Overwrite old file
 		      os.path.join(cf.output_dir, 'v.mp4')]
 	pipe = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE)
