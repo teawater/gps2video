@@ -10,18 +10,23 @@ class gps2video_cf(ConfigParser.ConfigParser):
         ConfigParser.ConfigParser.__init__(self)
         ConfigParser.ConfigParser.readfp(self, self.cfp)
 
-        self.output_dir = "./output/"
-        if self.has_option("optional", "output_dir"):
-            self.output_dir = self.get("optional", "output_dir")
-            if os.path.exists(self.output_dir) and not os.path.isdir(self.output_dir):
-                raise Exception("输出目录"+self.output_dir+"不是目录，不好好设置信不信给你删了？")
+        self.google_map_premium = self.get("optional", "google_map_premium", "no")
+        if self.google_map_premium == "yes":
+            self.google_map_premium = True
+        elif self.google_map_premium == "no":
+            self.google_map_premium = False
+        else:
+            raise Exception("你到底是不是google map premium，写清楚！")
+        print "google_map_premium 设置为:", self.google_map_premium
+
+        self.output_dir = self.get("optional", "output_dir", "./output/")
+        if os.path.exists(self.output_dir) and not os.path.isdir(self.output_dir):
+            raise Exception("输出目录"+self.output_dir+"不是目录，不好好设置信不信给你删了？")
         if not os.path.exists(self.output_dir):
             os.mkdir(self.output_dir)
         print "输出目录设置为:" + self.output_dir
 
-        self.speed = 1
-        if self.has_option("optional", "speed"):
-            self.speed = self.getint("optional", "speed")
+        self.speed = self.getint("optional", "speed", 1)
         print ("绘制速率为: %dx") % self.speed
 
     def __del__(self):
@@ -35,14 +40,20 @@ class gps2video_cf(ConfigParser.ConfigParser):
             return False
         return True
 
-    def get(self, section, option):
+    def get(self, section, option, default = None):
         if not self.has_option(section, option):
-            raise Exception(section+"中的项目"+option+"没设置啊！")
+            if default == None:
+                raise Exception(section+"中的项目"+option+"没设置啊！")
+            else:
+                return default
         return ConfigParser.ConfigParser.get(self, section, option)
 
-    def getint(self, section, option):
+    def getint(self, section, option, default = None):
         if not self.has_option(section, option):
-            raise Exception(section+"中的项目"+option+"没设置啊！")
+            if default == None:
+                raise Exception(section+"中的项目"+option+"没设置啊！")
+            else:
+                return default
         return ConfigParser.ConfigParser.getint(self, section, option)
 
 
@@ -94,15 +105,10 @@ class map_class:
         self.prev_x = None
         self.prev_y = None
 
-        self.size_max = 640
-        if cf.has_option("optional", "google_map_premium"):
-            premium = cf.get("optional", "google_map_premium")
-            if premium == "yes":
-                self.size_max = 2048
-            elif premium == "no":
-                self.size_max = 640
-            else:
-                raise Exception("你到底是不是google map premium，写清楚！")
+        if cf.google_map_premium:
+            self.size_max = 2048
+        else:
+            self.size_max = 640
 
         self.width = cf.getint("required", "video_width")
         if self.width > self.size_max:
