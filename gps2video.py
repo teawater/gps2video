@@ -188,6 +188,7 @@ class map_class:
         ufp.close()
 
         self.img = Image.open(self.pic)
+        self.img = self.img.convert("RGBA")
         self.draw = ImageDraw.Draw(self.img)
 
     def write_video(self, pipe, latitude, longitude, step=True):
