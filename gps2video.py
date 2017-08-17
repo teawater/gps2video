@@ -142,8 +142,6 @@ class map_class:
         b_tmp = self.cf.video_border * 2
         if b_tmp >= self.cf.video_width or b_tmp >= self.cf.video_height:
             raise Exception("你把video_border设置这么大不怕系统爆炸吗？")
-        self.real_width = self.cf.video_width - b_tmp
-        self.real_height = self.cf.video_height - b_tmp
 
         self.get_zoom_and_center(self.cf.video_width - b_tmp, self.cf.video_height - b_tmp)
         print "缩放率是", self.zoom
