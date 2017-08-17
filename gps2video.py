@@ -120,6 +120,8 @@ class map_class:
         self.get_zoom_and_center(self.width - b_tmp, self.height - b_tmp)
         print "缩放率是", self.zoom
 
+        self.line_color = cf.get("required", "line_color")
+
         self.map_key = cf.get("required", "google_map_key")
 
         self.map_type = cf.get("required", "google_map_type")
@@ -192,7 +194,7 @@ class map_class:
         x, y = self.gps_to_pixel(latitude, longitude)
         if self.prev_x != None:
             self.draw.line([(self.prev_x, self.prev_y),
-                        (x, y)], fill=255, width = 3)
+                        (x, y)], fill=self.line_color, width = 3)
         if step:
             self.img.save(pipe.stdin, 'PNG')
         self.prev_x = x
