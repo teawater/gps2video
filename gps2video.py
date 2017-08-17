@@ -33,9 +33,6 @@ class gps2video_cf(ConfigParser.ConfigParser):
         self.video_border = self.getint("required", "video_border")
         print ("video_border设置为: %d") % self.video_border
 
-        self.line_color = self.get("required", "line_color")
-        print ("line_color设置为: %s") % self.line_color
-
         self.google_map_premium = self.get("optional", "google_map_premium", "no")
         if self.google_map_premium == "yes":
             self.google_map_premium = True
@@ -51,6 +48,9 @@ class gps2video_cf(ConfigParser.ConfigParser):
         if not os.path.exists(self.output_dir):
             os.mkdir(self.output_dir)
         print ("输出目录设置为: %s") % self.output_dir
+
+        self.line_color = self.get("optional", "line_color", "white")
+        print ("line_color设置为: %s") % self.line_color
 
         self.speed = self.getint("optional", "speed", 1)
         print ("绘制速率为: %dx") % self.speed
