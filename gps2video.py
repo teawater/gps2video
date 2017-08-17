@@ -10,6 +10,32 @@ class gps2video_cf(ConfigParser.ConfigParser):
         ConfigParser.ConfigParser.__init__(self)
         ConfigParser.ConfigParser.readfp(self, self.cfp)
 
+        self.ffmpeg = self.get("required", "ffmpeg")
+        print ("ffmpeg设置为: %s") % self.ffmpeg
+
+        self.gps_file = self.get("required", "gps_file")
+        print ("gps_file设置为: %s") % self.gps_file
+
+        self.google_map_key = self.get("required", "google_map_key")
+        print ("google_map_key设置为: %s") % self.google_map_key
+
+        self.google_map_type = self.get("required", "google_map_type")
+        if self.google_map_type != "roadmap" and self.google_map_type != "satellite" and self.google_map_type != "terrain" and self.google_map_type != "hybrid":
+            raise Exception("地图类型"+self.google_map_type+"是什么鬼？")
+        print ("google_map_type设置为: %s") % self.google_map_type
+
+        self.video_width = self.getint("required", "video_width")
+        print ("video_width设置为: %d") % self.video_width
+
+        self.video_height = self.getint("required", "video_height")
+        print ("video_height设置为: %d") % self.video_height
+
+        self.video_border = self.getint("required", "video_border")
+        print ("video_border设置为: %d") % self.video_border
+
+        self.line_color = self.get("required", "line_color")
+        print ("line_color设置为: %s") % self.line_color
+
         self.google_map_premium = self.get("optional", "google_map_premium", "no")
         if self.google_map_premium == "yes":
             self.google_map_premium = True
@@ -24,7 +50,7 @@ class gps2video_cf(ConfigParser.ConfigParser):
             raise Exception("输出目录"+self.output_dir+"不是目录，不好好设置信不信给你删了？")
         if not os.path.exists(self.output_dir):
             os.mkdir(self.output_dir)
-        print "输出目录设置为:" + self.output_dir
+        print ("输出目录设置为: %s") % self.output_dir
 
         self.speed = self.getint("optional", "speed", 1)
         print ("绘制速率为: %dx") % self.speed
@@ -59,7 +85,7 @@ class gps2video_cf(ConfigParser.ConfigParser):
 class gps_class:
     def __init__(self, cf):
         self.cf = cf
-        self.gfp = open(cf.get("required", "gps_file"))
+        self.gfp = open(cf.gps_file)
         self.rec = gpxpy.parse(self.gfp)
         self.get_max_min()
 
@@ -109,29 +135,18 @@ class map_class:
         else:
             self.size_max = 640
 
-        self.width = cf.getint("required", "video_width")
-        if self.width > self.size_max:
+        if self.cf.video_width > self.size_max:
             raise Exception("你把video_width设置这么大不怕系统爆炸吗？")
-        self.height = cf.getint("required", "video_height")
-        if self.height > self.size_max:
+        if self.cf.video_height > self.size_max:
             raise Exception("你把video_height设置这么大不怕系统爆炸吗？")
-        self.border = cf.getint("required", "video_border")
-        b_tmp = self.border * 2
-        if b_tmp >= self.width or b_tmp >= self.height:
+        b_tmp = self.cf.video_border * 2
+        if b_tmp >= self.cf.video_width or b_tmp >= self.cf.video_height:
             raise Exception("你把video_border设置这么大不怕系统爆炸吗？")
-        self.real_width = self.width - b_tmp
-        self.real_height = self.height - b_tmp
+        self.real_width = self.cf.video_width - b_tmp
+        self.real_height = self.cf.video_height - b_tmp
 
-        self.get_zoom_and_center(self.width - b_tmp, self.height - b_tmp)
+        self.get_zoom_and_center(self.cf.video_width - b_tmp, self.cf.video_height - b_tmp)
         print "缩放率是", self.zoom
-
-        self.line_color = cf.get("required", "line_color")
-
-        self.map_key = cf.get("required", "google_map_key")
-
-        self.map_type = cf.get("required", "google_map_type")
-        if self.map_type != "roadmap" and self.map_type != "satellite" and self.map_type != "terrain" and self.map_type != "hybrid":
-            raise Exception("地图类型"+self.map_type+"是什么鬼？")
 
     #下面这两个函数取自 https://github.com/whit537/gheat/blob/master/__/lib/python/gmerc.py
     def gps_to_global_pixel(self, latitude, longitude):
@@ -165,8 +180,8 @@ class map_class:
         self.center_gx = min_x + float(max_x - min_x) / 2
         self.center_gy = min_y + float(max_y - min_y) / 2
         self.center_latitude, self.center_longitude = self.global_pixel_to_gps(self.center_gx, self.center_gy)
-        self.center_x = float(self.width - 1) / 2
-        self.center_y = float(self.height - 1) / 2
+        self.center_x = float(self.cf.video_width - 1) / 2
+        self.center_y = float(self.cf.video_height - 1) / 2
 
     def gps_to_pixel(self, latitude, longitude):
         gx, gy = self.gps_to_global_pixel(latitude, longitude)
@@ -176,11 +191,11 @@ class map_class:
 
     def get_map(self):
         url = "https://maps.googleapis.com/maps/api/staticmap?format=png"
-        url += "&key=" + self.map_key
+        url += "&key=" + self.cf.google_map_key
         url += "&center=" + str(self.center_latitude) + "," + str(self.center_longitude)
         url += "&zoom=" + str(self.zoom)
-        url += "&size=" + str(self.width) + "x" + str(self.height)
-        url += "&maptype=" + self.map_type
+        url += "&size=" + str(self.cf.video_width) + "x" + str(self.cf.video_height)
+        url += "&maptype=" + self.cf.google_map_type
         print "将从下面的地址下载地图："
         print url
 
@@ -200,7 +215,7 @@ class map_class:
         x, y = self.gps_to_pixel(latitude, longitude)
         if self.prev_x != None:
             self.draw.line([(self.prev_x, self.prev_y), (x, y)],
-                           fill = self.line_color, width = 3)
+                           fill = self.cf.line_color, width = 3)
         if step:
             self.img.save(pipe.stdin, 'PNG')
         self.prev_x = x
@@ -230,8 +245,7 @@ def gps2video(config_file_path="config.ini"):
     m.get_map()
 
     #生成视频
-    ffmpeg = cf.get("required", "ffmpeg")
-    ffmpeg_cmd = [ffmpeg,
+    ffmpeg_cmd = [cf.ffmpeg,
                   '-f', 'image2pipe',
                   '-vcodec', 'png',
                   '-r', '36',  # FPS
