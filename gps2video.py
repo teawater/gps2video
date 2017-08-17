@@ -117,7 +117,6 @@ class gps_class:
                 for point in segment.points:
                     m.write_video(pipe, point.latitude, point.longitude, step % self.cf.speed == 0)
                     step = step + 1
-        m.write_video_last(pipe)
 
 class map_class:
     def __init__(self, cf, gps):
@@ -223,6 +222,27 @@ class map_class:
         for i in range(36 * 4):
             self.img.save(pipe.stdin, 'PNG')
 
+class video_class:
+    def __init__(self, cf):
+        self.video_file = os.path.join(cf.output_dir, 'v.mp4')
+        self.ffmpeg_cmd = [cf.ffmpeg,
+                           '-f', 'image2pipe',
+                           '-vcodec', 'png',
+                           '-r', '36',  # FPS
+                           '-i', '-',  # Indicated input comes from pipe 
+                           '-q:v', '1',
+                           '-c:v', 'mpeg4',
+                           '-y', #Overwrite old file
+                           self.video_file]
+
+    def generate(self, m, gps):
+        pipe = subprocess.Popen(self.ffmpeg_cmd, stdin=subprocess.PIPE)
+        gps.write_video(m, pipe)
+        m.write_video_last(pipe)
+        pipe.stdin.close()
+        pipe.wait()
+        print "视频生成成功：", self.video_file
+
 def gps2video(config_file_path="config.ini"):
     #配置对象cf初始化
     try:
@@ -242,21 +262,11 @@ def gps2video(config_file_path="config.ini"):
     #下载地图
     m.get_map()
 
-    #生成视频
-    ffmpeg_cmd = [cf.ffmpeg,
-                  '-f', 'image2pipe',
-                  '-vcodec', 'png',
-                  '-r', '36',  # FPS
-                  '-i', '-',  # Indicated input comes from pipe 
-                  '-q:v', '1',
-                  '-c:v', 'mpeg4',
-                  '-y', #Overwrite old file
-                  os.path.join(cf.output_dir, 'v.mp4')]
-    pipe = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE)
-    gps.write_video(m, pipe)
-    pipe.stdin.close()
-    pipe.wait()
-    print "视频生成成功：", os.path.join(cf.output_dir, 'v.mp4')
+    #视频类初始化
+    video = video_class(cf)
+
+    #视频生成
+    video.generate(m, gps)
 
 if __name__ == "__main__":
     gps2video()
