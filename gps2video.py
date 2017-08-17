@@ -110,12 +110,12 @@ class gps_class:
                     if self.min_longitude == None or point.longitude < self.min_longitude:
                         self.min_longitude = point.longitude
 
-    def write_video(self, m, pipe, speed=1):
+    def write_video(self, m, pipe):
         step = 0
         for track in self.rec.tracks:
             for segment in track.segments:
                 for point in segment.points:
-                    m.write_video(pipe, point.latitude, point.longitude, step%speed == 0)
+                    m.write_video(pipe, point.latitude, point.longitude, step % self.cf.speed == 0)
                     step = step + 1
         m.write_video_last(pipe)
 
@@ -253,7 +253,7 @@ def gps2video(config_file_path="config.ini"):
                   '-y', #Overwrite old file
                   os.path.join(cf.output_dir, 'v.mp4')]
     pipe = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE)
-    gps.write_video(m, pipe, cf.speed)
+    gps.write_video(m, pipe)
     pipe.stdin.close()
     pipe.wait()
     print "视频生成成功：", os.path.join(cf.output_dir, 'v.mp4')
