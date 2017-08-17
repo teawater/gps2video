@@ -56,7 +56,6 @@ class gps2video_cf(ConfigParser.ConfigParser):
                 return default
         return ConfigParser.ConfigParser.getint(self, section, option)
 
-
 class gps_class:
     def __init__(self, cf):
         self.cf = cf
