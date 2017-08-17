@@ -194,8 +194,8 @@ class map_class:
     def write_video(self, pipe, latitude, longitude, step=True):
         x, y = self.gps_to_pixel(latitude, longitude)
         if self.prev_x != None:
-            self.draw.line([(self.prev_x, self.prev_y),
-                        (x, y)], fill=self.line_color, width = 3)
+            self.draw.line([(self.prev_x, self.prev_y), (x, y)],
+                           fill = self.line_color, width = 3)
         if step:
             self.img.save(pipe.stdin, 'PNG')
         self.prev_x = x
