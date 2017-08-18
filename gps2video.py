@@ -110,13 +110,11 @@ class gps_class:
                     if self.min_longitude == None or point.longitude < self.min_longitude:
                         self.min_longitude = point.longitude
 
-    def write_video(self, m, pipe):
-        step = 0
+    def track_walk(self, c):
         for track in self.rec.tracks:
             for segment in track.segments:
                 for point in segment.points:
-                    m.write_video(pipe, point.latitude, point.longitude, step % self.cf.speed == 0)
-                    step = step + 1
+                    c.track_walk_callback(point)
 
 class map_class:
     def __init__(self, cf, gps):
@@ -208,22 +206,22 @@ class map_class:
         self.img = self.img.convert("RGBA")
         self.draw = ImageDraw.Draw(self.img)
 
-    def write_video(self, pipe, latitude, longitude, step=True):
-        x, y = self.gps_to_pixel(latitude, longitude)
-        if self.prev_x != None:
+    def write_one_point(self, pipe, write = True, point = None):
+        if point != None:
+            x, y = self.gps_to_pixel(point.latitude, point.longitude)
+        if self.prev_x != None and point != None:
             self.draw.line([(self.prev_x, self.prev_y), (x, y)],
                            fill = self.cf.line_color, width = 3)
-        if step:
+        if write:
             self.img.save(pipe.stdin, 'PNG')
-        self.prev_x = x
-        self.prev_y = y
-
-    def write_video_last(self, pipe):
-        for i in range(36 * 4):
-            self.img.save(pipe.stdin, 'PNG')
+        if point != None:
+            self.prev_x = x
+            self.prev_y = y
 
 class video_class:
     def __init__(self, cf):
+        self.cf = cf
+
         self.video_file = os.path.join(cf.output_dir, 'v.mp4')
         self.ffmpeg_cmd = [cf.ffmpeg,
                            '-f', 'image2pipe',
@@ -235,12 +233,21 @@ class video_class:
                            '-y', #Overwrite old file
                            self.video_file]
 
+    def write_one_point(self, point):
+        self.m.write_one_point(self.pipe, self.point_count % self.cf.speed == 0, point)
+        self.point_count += 1
+
     def generate(self, m, gps):
-        pipe = subprocess.Popen(self.ffmpeg_cmd, stdin=subprocess.PIPE)
-        gps.write_video(m, pipe)
-        m.write_video_last(pipe)
-        pipe.stdin.close()
-        pipe.wait()
+        self.m = m
+        self.pipe = subprocess.Popen(self.ffmpeg_cmd, stdin=subprocess.PIPE)
+        self.point_count = 0
+        self.track_walk_callback = self.write_one_point
+        gps.track_walk(self)
+        #全部输出结束后停留4秒
+        for i in range(36 * 4):
+            m.write_one_point(self.pipe)
+        self.pipe.stdin.close()
+        self.pipe.wait()
         print "视频生成成功：", self.video_file
 
 def gps2video(config_file_path="config.ini"):
