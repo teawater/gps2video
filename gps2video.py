@@ -295,12 +295,15 @@ class map_class:
 
         if point != None:
             x, y = self.gps_to_pixel(point.latitude, point.longitude)
+        else:
+            x, y = self.prev_x, self.prev_y
         if self.prev_x != None and point != None:
             self.draw.line([(self.prev_x, self.prev_y), (x, y)],
                            fill = self.cf.line_color, width = 3)
         if write:
             img = copy.deepcopy(self.img)
             draw = ImageDraw.Draw(img)
+            draw.ellipse([(x - 5, y - 5), (x + 5, y + 5)], fill = "yellow")
             draw.text((0,0),
                       self.get_move_info(point != None),
                       font = self.font,
