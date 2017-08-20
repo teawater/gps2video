@@ -52,6 +52,12 @@ class gps2video_cf(ConfigParser.ConfigParser):
         self.line_color = self.get("optional", "line_color", "white")
         print ("line_color设置为: %s") % self.line_color
 
+        self.point_color = self.get("optional", "point_color", "white")
+        print ("point_color设置为: %s") % self.point_color
+
+        self.font_color = self.get("optional", "font_color", "white")
+        print ("font_color设置为: %s") % self.font_color
+
         self.speed = self.getint("optional", "speed", 1)
         print ("绘制速率为: %dx") % self.speed
 
@@ -303,11 +309,12 @@ class map_class:
         if write:
             img = copy.deepcopy(self.img)
             draw = ImageDraw.Draw(img)
-            draw.ellipse([(x - 5, y - 5), (x + 5, y + 5)], fill = "yellow")
+            draw.ellipse([(x - 5, y - 5), (x + 5, y + 5)],
+                         fill = self.cf.point_color)
             draw.text((0,0),
                       self.get_move_info(point != None),
                       font = self.font,
-                      fill = self.cf.line_color)
+                      fill = self.cf.font_color)
             img.save(pipe.stdin, 'PNG')
             del(draw)
             del(img)
