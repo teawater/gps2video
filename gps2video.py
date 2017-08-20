@@ -49,7 +49,7 @@ class gps2video_cf(ConfigParser.ConfigParser):
             os.mkdir(self.output_dir)
         print ("输出目录设置为: %s") % self.output_dir
 
-        self.line_color = self.get("optional", "line_color", "white")
+        self.line_color = self.get("optional", "line_color", "yellow")
         print ("line_color设置为: %s") % self.line_color
 
         self.point_color = self.get("optional", "point_color", "white")
