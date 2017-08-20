@@ -64,6 +64,9 @@ class gps2video_cf(ConfigParser.ConfigParser):
         self.speed = self.getint("optional", "speed", 1)
         print ("绘制速率为: %dx") % self.speed
 
+        self.hide_head = self.getint("optional", "hide_head", 0)
+        print ("hide_head为: %d") % self.hide_head
+
     def __del__(self):
         if hasattr(self, 'cfp'):
             self.cfp.close()
@@ -102,6 +105,15 @@ class gps_class:
         if hasattr(self, 'gfp'):
             self.gfp.close()
 
+    def get_distance(self, p1, p2):
+        if p1 == None or p2 == None:
+            return 0
+
+        distance = p2.distance_3d(p1)
+        if not distance:
+            distance = p2.distance_2d(p1)
+        return distance
+
     def get_max_min(self):
         self.max_latitude = None
         self.min_latitude = None
@@ -109,7 +121,15 @@ class gps_class:
         self.min_longitude = None
         for track in self.rec.tracks:
             for segment in track.segments:
+                prev_point = None
+                distance = 0
                 for point in segment.points:
+                    if prev_point != None:
+                        distance += self.get_distance(prev_point, point)
+                    prev_point = point
+                    if distance < self.cf.hide_head:
+                        continue
+
                     if self.max_latitude == None or point.latitude > self.max_latitude:
                         self.max_latitude = point.latitude
                     if self.min_latitude == None or point.latitude < self.min_latitude:
@@ -244,20 +264,11 @@ class map_class:
 
         return p2.time_difference(p1)
 
-    def get_distance(self, p1, p2):
-        if p1 == None or p2 == None:
-            return 0
-
-        distance = p2.distance_3d(p1)
-        if not distance:
-            distance = p2.distance_2d(p1)
-        return distance
-
     def inc_distance(self, p1, p2):
         if p1 == None or p2 == None:
             return
         
-        self.distance += self.get_distance(p1, p2)
+        self.distance += self.gps.get_distance(p1, p2)
 
     def get_time_unicode(self, secs):
         hours = secs / (60 * 60)
@@ -308,31 +319,33 @@ class map_class:
         if self.first_point == None:
             self.first_point = point
 
-        self.inc_distance(self.prev_point, point)
-        self.not_write_distance += self.get_distance(self.prev_point, point)
-        self.not_write_secs += self.get_secs(self.prev_point, point)
-        if write:
-            self.frame_count += 1
-
         if point != None:
             x, y = self.gps_to_pixel(point.latitude, point.longitude)
         else:
             x, y = self.prev_x, self.prev_y
-        if self.prev_x != None and point != None:
-            self.draw.line([(self.prev_x, self.prev_y), (x, y)],
-                           fill = self.cf.line_color, width = 3)
-        if write:
-            img = copy.deepcopy(self.img)
-            draw = ImageDraw.Draw(img)
-            draw.ellipse([(x - 5, y - 5), (x + 5, y + 5)],
-                         fill = self.cf.point_color)
-            draw.text((0,0),
-                      self.get_move_info(point),
-                      font = self.font,
-                      fill = self.cf.font_color)
-            img.save(pipe.stdin, 'PNG')
-            del(draw)
-            del(img)
+
+        self.inc_distance(self.prev_point, point)
+        if self.distance >= self.cf.hide_head:
+            self.not_write_distance += self.gps.get_distance(self.prev_point, point)
+            self.not_write_secs += self.get_secs(self.prev_point, point)
+            if write:
+                self.frame_count += 1
+
+            if self.prev_x != None and point != None:
+                self.draw.line([(self.prev_x, self.prev_y), (x, y)],
+                               fill = self.cf.line_color, width = 3)
+            if write:
+                img = copy.deepcopy(self.img)
+                draw = ImageDraw.Draw(img)
+                draw.ellipse([(x - 5, y - 5), (x + 5, y + 5)],
+                             fill = self.cf.point_color)
+                draw.text((0,0),
+                          self.get_move_info(point),
+                          font = self.font,
+                          fill = self.cf.font_color)
+                img.save(pipe.stdin, 'PNG')
+                del(draw)
+                del(img)
 
         if point != None:
             self.prev_x = x
