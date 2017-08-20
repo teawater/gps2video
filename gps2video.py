@@ -176,7 +176,7 @@ class map_class:
         return latitude, longitude
 
     def get_zoom_and_center(self, width, height):
-        for self.zoom in range(20, -1, -1):
+        for self.zoom in range(19, -1, -1):
             min_x, max_y = self.gps_to_global_pixel(self.gps.min_latitude, self.gps.min_longitude)
             max_x, min_y = self.gps_to_global_pixel(self.gps.max_latitude, self.gps.max_longitude)
             if max_x - min_x < width and max_y - min_y < height:
