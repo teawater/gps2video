@@ -202,7 +202,7 @@ class map_class:
     def get_font(self):
         for size in range(1, self.size_max):
             font = ImageFont.truetype('./DroidSansFallback.ttf', size = size)
-            width, height = font.getsize(u'距离:999.99公里 当前速度:23小时59分59秒/公里')
+            width, height = font.getsize(u'距离:999.99公里 时间:23小时59分59秒 当前速度:23小时59分59秒/公里')
             if width >= self.cf.video_width or height >= self.max_font_height:
                 break
         if size != 1:
@@ -259,9 +259,7 @@ class map_class:
         
         self.distance += self.get_distance(p1, p2)
 
-    def get_speed_unicode(self, secs, meters):
-        secs = int(secs/(meters/1000))
-
+    def get_time_unicode(self, secs):
         hours = secs / (60 * 60)
         secs = secs % (60 * 60)
         mins = secs / 60
@@ -273,15 +271,28 @@ class map_class:
         if mins != 0:
             ret += unicode(format(mins, '02')) + u"分"
         ret += unicode(format(secs, '02')) + u"秒"
+
+        return ret
+
+    def get_speed_unicode(self, secs, meters):
+        secs = int(secs/(meters/1000))
+
+        ret = u""
+        ret += self.get_time_unicode(secs)
         ret += u"/公里"
 
         return ret
 
-    def get_move_info(self, current):
-        ret = u""
+    def get_move_info(self, point):
+        if point != None:
+            real_point = point
+        else:
+            real_point = self.prev_point
 
+        ret = u""
         ret += u" 距离:" + unicode(format(self.distance/1000, '.2f'))+u"公里"
-        if current:
+        ret += u" 时间:" + self.get_time_unicode(self.get_secs(self.first_point, real_point))
+        if point != None:
             if self.frame_count == self.cf.video_fps:
                 self.current_speed = u" 当前速度:" + self.get_speed_unicode(self.not_write_secs, self.not_write_distance)
                 self.not_write_secs = 0
@@ -289,7 +300,7 @@ class map_class:
                 self.frame_count = 0
             ret += self.current_speed
         else:
-            ret += u" 平均速度:" + self.get_speed_unicode(self.get_secs(self.first_point, self.prev_point), self.distance)
+            ret += u" 平均速度:" + self.get_speed_unicode(self.get_secs(self.first_point, real_point), self.distance)
 
         return ret
 
@@ -316,7 +327,7 @@ class map_class:
             draw.ellipse([(x - 5, y - 5), (x + 5, y + 5)],
                          fill = self.cf.point_color)
             draw.text((0,0),
-                      self.get_move_info(point != None),
+                      self.get_move_info(point),
                       font = self.font,
                       fill = self.cf.font_color)
             img.save(pipe.stdin, 'PNG')
