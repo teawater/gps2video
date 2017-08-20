@@ -58,6 +58,9 @@ class gps2video_cf(ConfigParser.ConfigParser):
         self.font_color = self.get("optional", "font_color", "white")
         print ("font_color设置为: %s") % self.font_color
 
+        self.video_fps = self.getint("optional", "video_fps", 60)
+        print ("video_fps为: %d") % self.video_fps
+
         self.speed = self.getint("optional", "speed", 1)
         print ("绘制速率为: %dx") % self.speed
 
@@ -278,7 +281,7 @@ class map_class:
 
         ret += u" 距离:" + unicode(format(self.distance/1000, '.2f'))+u"公里"
         if current:
-            if self.frame_count == 32:
+            if self.frame_count == self.cf.video_fps:
                 self.current_speed = u" 当前速度:" + self.get_speed_unicode(self.not_write_secs, self.not_write_distance)
                 self.not_write_secs = 0
                 self.not_write_distance = 0.0
@@ -332,7 +335,7 @@ class video_class:
         self.ffmpeg_cmd = [cf.ffmpeg,
                            '-f', 'image2pipe',
                            '-vcodec', 'png',
-                           '-r', '36',  # FPS
+                           '-r', str(self.cf.video_fps),  # FPS
                            '-i', '-',  # Indicated input comes from pipe 
                            '-q:v', '1',
                            '-c:v', 'mpeg4',
@@ -350,7 +353,7 @@ class video_class:
         self.track_walk_callback = self.write_one_point
         gps.track_walk(self)
         #全部输出结束后停留2秒
-        for i in range(36 * 2):
+        for i in range(self.cf.video_fps * 2):
             m.write_one_point(self.pipe)
         self.pipe.stdin.close()
         self.pipe.wait()
