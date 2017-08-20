@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os, ConfigParser, gpxpy, math, urllib2, subprocess
-from PIL import Image, ImageDraw
+import os, ConfigParser, gpxpy, math, urllib2, subprocess, copy
+from PIL import Image, ImageDraw, ImageFont
 
 class gps2video_cf(ConfigParser.ConfigParser):
     def __init__(self, config_file_path):
@@ -126,6 +126,14 @@ class map_class:
         self.cf = cf
         self.prev_x = None
         self.prev_y = None
+        self.prev_point = None
+        self.distance = 0.0
+        self.img = None
+        self.first_point = None
+        self.not_write_distance = 0.0
+        self.not_write_secs = 0
+        self.current_speed = ""
+        self.frame_count = 0
 
         if cf.google_map_premium:
             self.size_max = 2048
@@ -142,6 +150,8 @@ class map_class:
 
         self.get_zoom_and_center(self.cf.video_width - b_tmp, self.cf.video_height - b_tmp)
         print "缩放率是", self.zoom
+
+        self.get_font()
 
     #下面这两个函数取自 https://github.com/whit537/gheat/blob/master/__/lib/python/gmerc.py
     def gps_to_global_pixel(self, latitude, longitude):
@@ -178,6 +188,19 @@ class map_class:
         self.center_x = float(self.cf.video_width - 1) / 2
         self.center_y = float(self.cf.video_height - 1) / 2
 
+        self.max_font_height = (self.cf.video_height - (max_y - min_y))/2
+
+    def get_font(self):
+        for size in range(1, self.size_max):
+            font = ImageFont.truetype('./DroidSansFallback.ttf', size = size)
+            width, height = font.getsize(u'距离:999.99公里 当前速度:23小时59分59秒/公里')
+            if width >= self.cf.video_width or height >= self.max_font_height:
+                break
+        if size != 1:
+            size -= 1
+        print "字体大小是", size
+        self.font = ImageFont.truetype('./DroidSansFallback.ttf', size = size)
+
     def gps_to_pixel(self, latitude, longitude):
         gx, gy = self.gps_to_global_pixel(latitude, longitude)
         x = int(round(gx - self.center_gx + self.center_x))
@@ -206,17 +229,90 @@ class map_class:
         self.img = self.img.convert("RGBA")
         self.draw = ImageDraw.Draw(self.img)
 
+    def get_secs(self, p1, p2):
+        if p1 == None or p2 == None:
+            return 0
+
+        return p2.time_difference(p1)
+
+    def get_distance(self, p1, p2):
+        if p1 == None or p2 == None:
+            return 0
+
+        distance = p2.distance_3d(p1)
+        if not distance:
+            distance = p2.distance_2d(p1)
+        return distance
+
+    def inc_distance(self, p1, p2):
+        if p1 == None or p2 == None:
+            return
+        
+        self.distance += self.get_distance(p1, p2)
+
+    def get_speed_unicode(self, secs, meters):
+        secs = int(secs/(meters/1000))
+
+        hours = secs / (60 * 60)
+        secs = secs % (60 * 60)
+        mins = secs / 60
+        secs = secs % 60
+
+        ret = u""
+        if hours != 0:
+            ret += unicode(hours) + u"小时"
+        if mins != 0:
+            ret += unicode(format(mins, '02')) + u"分"
+        ret += unicode(format(secs, '02')) + u"秒"
+
+        return ret
+
+    def get_move_info(self, current):
+        ret = u""
+
+        ret += u" 距离:" + unicode(format(self.distance/1000, '.2f'))+u"公里"
+        if current:
+            if self.frame_count == 32:
+                self.current_speed = u" 当前速度:" + self.get_speed_unicode(self.not_write_secs, self.not_write_distance)
+                self.not_write_secs = 0
+                self.not_write_distance = 0.0
+                self.frame_count = 0
+            ret += self.current_speed
+        else:
+            ret += u" 平均速度:" + self.get_speed_unicode(self.get_secs(self.first_point, self.prev_point), self.distance)
+
+        return ret
+
     def write_one_point(self, pipe, write = True, point = None):
+        if self.first_point == None:
+            self.first_point = point
+
+        self.inc_distance(self.prev_point, point)
+        self.not_write_distance += self.get_distance(self.prev_point, point)
+        self.not_write_secs += self.get_secs(self.prev_point, point)
+        if write:
+            self.frame_count += 1
+
         if point != None:
             x, y = self.gps_to_pixel(point.latitude, point.longitude)
         if self.prev_x != None and point != None:
             self.draw.line([(self.prev_x, self.prev_y), (x, y)],
                            fill = self.cf.line_color, width = 3)
         if write:
-            self.img.save(pipe.stdin, 'PNG')
+            img = copy.deepcopy(self.img)
+            draw = ImageDraw.Draw(img)
+            draw.text((0,0),
+                      self.get_move_info(point != None),
+                      font = self.font,
+                      fill = self.cf.line_color)
+            img.save(pipe.stdin, 'PNG')
+            del(draw)
+            del(img)
+
         if point != None:
             self.prev_x = x
             self.prev_y = y
+            self.prev_point = point
 
 class video_class:
     def __init__(self, cf):
@@ -243,8 +339,8 @@ class video_class:
         self.point_count = 0
         self.track_walk_callback = self.write_one_point
         gps.track_walk(self)
-        #全部输出结束后停留4秒
-        for i in range(36 * 4):
+        #全部输出结束后停留2秒
+        for i in range(36 * 2):
             m.write_one_point(self.pipe)
         self.pipe.stdin.close()
         self.pipe.wait()
