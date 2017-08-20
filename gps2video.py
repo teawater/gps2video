@@ -273,6 +273,7 @@ class map_class:
         if mins != 0:
             ret += unicode(format(mins, '02')) + u"分"
         ret += unicode(format(secs, '02')) + u"秒"
+        ret += u"/公里"
 
         return ret
 
