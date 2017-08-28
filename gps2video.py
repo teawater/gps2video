@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os, sys, ConfigParser, gpxpy, math, urllib2, subprocess, copy, getopt
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 class opt_class:
     def __init__(self, attr, section = None, default = None, is_int = False, option = None, show = None):
@@ -58,6 +58,8 @@ class cf_class(ConfigParser.ConfigParser):
         self.opts.append(opt_class("video_fps", "optional", 60, is_int=True))
         self.opts.append(opt_class("speed", "optional", 1, is_int=True, show="绘制速率"))
         self.opts.append(opt_class("hide_head", "optional", 0, is_int=True))
+        self.opts.append(opt_class("head_file", "optional", ""))
+        self.opts.append(opt_class("head_size", "optional", 20, is_int=True))
 
     def check_opts(self):
         if self.google_map_type != "roadmap" and self.google_map_type != "satellite" and self.google_map_type != "terrain" and self.google_map_type != "hybrid":
@@ -227,6 +229,19 @@ class map_class:
 
         self.get_font()
 
+        if self.cf.head_file != "":
+            #头像初始化 self.head self.head_alpha
+            size = (self.cf.head_size, self.cf.head_size)
+            mask = Image.new('L', size, 0)
+            draw = ImageDraw.Draw(mask)
+            draw.ellipse((0, 0) + size, fill=255)
+            im = Image.open(self.cf.head_file)
+            self.head = ImageOps.fit(im, mask.size, centering=(0.5, 0.5))
+            self.head.putalpha(mask)
+            _, _, _, self.head_alpha = self.head.split()
+        else:
+            self.head = None
+
     #下面这两个函数取自 https://github.com/whit537/gheat/blob/master/__/lib/python/gmerc.py
     def gps_to_global_pixel(self, latitude, longitude):
         cbk = self.cbk[self.zoom]
@@ -382,12 +397,16 @@ class map_class:
             if write:
                 img = copy.deepcopy(self.img)
                 draw = ImageDraw.Draw(img)
-                draw.ellipse([(x - 5, y - 5), (x + 5, y + 5)],
-                             fill = self.cf.point_color)
                 draw.text((0,0),
                           self.get_move_info(point),
                           font = self.font,
                           fill = self.cf.font_color)
+                if self.head == None:
+                    draw.ellipse([(x - 5, y - 5), (x + 5, y + 5)],
+                                 fill = self.cf.point_color)
+                else:
+                    head_offset = self.cf.head_size / 2
+                    img.paste(self.head, box = (x - head_offset, y - head_offset), mask = self.head_alpha)
                 img.save(pipe.stdin, 'PNG')
                 del(draw)
                 del(img)
