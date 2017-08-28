@@ -7,3 +7,7 @@ cd gps2video
 python gps2video.py
 ```
 然后按照输出做即可。
+***
+更新记录：
+* 2017.08.28<br>
+  增加命令行配置功能。
