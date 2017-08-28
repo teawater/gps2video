@@ -1,37 +1,67 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os, ConfigParser, gpxpy, math, urllib2, subprocess, copy
+import os, sys, ConfigParser, gpxpy, math, urllib2, subprocess, copy, getopt
 from PIL import Image, ImageDraw, ImageFont
 
-class gps2video_cf(ConfigParser.ConfigParser):
-    def __init__(self, config_file_path):
-        self.cfp = open(config_file_path)
-        ConfigParser.ConfigParser.__init__(self)
-        ConfigParser.ConfigParser.readfp(self, self.cfp)
+class opt_class:
+    def __init__(self, attr, section = None, default = None, is_int = False, option = None, show = None):
+        """
+        :param attr: 读取成功后，对象cf_class中元素名称。
+        :param section: 配置文件section，如果设置为None则不会扫描配置文件。
+        :param default: 这个参数的默认值，如果为None的没设置这个attr会报错。
+        :param is_int: 为True则这个参数是int。
+        :param option: 配置文件option和命令行的，如果设置为None则同attr。
+        :param show: 用来显示的名称，显示的时候用，如果设置为None则同attr。
+        """
+        self.attr = attr
+        self.section = section
+        if option != None:
+            self.option = option
+        else:
+            self.option = attr
+        self.default = default
+        self.is_int = is_int
+        if show != None:
+            self.show = show
+        else:
+            self.show = attr
 
-        self.ffmpeg = self.get("required", "ffmpeg")
-        print ("ffmpeg设置为: %s") % self.ffmpeg
+class cf_class(ConfigParser.ConfigParser):
+    def __init__(self):
+        self.opts_init()
 
-        self.gps_file = self.get("required", "gps_file")
-        print ("gps_file设置为: %s") % self.gps_file
+        self.parse_cmd()
+        self.parse_config()
+        self.check_opts()
+        self.show_opts()
 
-        self.google_map_key = self.get("required", "google_map_key")
-        print ("google_map_key设置为: %s") % self.google_map_key
+    def __del__(self):
+        if hasattr(self, 'cfp'):
+            self.cfp.close()
 
-        self.google_map_type = self.get("required", "google_map_type")
+    def opts_init(self):
+        self.opts = []
+        self.opts.append(opt_class("ffmpeg", "required"))
+        self.opts.append(opt_class("gps_file", "required"))
+        self.opts.append(opt_class("google_map_key", "required"))
+        self.opts.append(opt_class("google_map_type", "required"))
+        self.opts.append(opt_class("video_width", "required", is_int=True))
+        self.opts.append(opt_class("video_height", "required", is_int=True))
+        self.opts.append(opt_class("video_border", "required", is_int=True))
+
+        self.opts.append(opt_class("google_map_premium", "optional", "no"))
+        self.opts.append(opt_class("output_dir", "optional", "./output/"))
+        self.opts.append(opt_class("line_color", "optional", "yellow"))
+        self.opts.append(opt_class("point_color", "optional", "white"))
+        self.opts.append(opt_class("font_color", "optional", "white"))
+        self.opts.append(opt_class("video_fps", "optional", 60, is_int=True))
+        self.opts.append(opt_class("speed", "optional", 1, is_int=True, show="绘制速率"))
+        self.opts.append(opt_class("hide_head", "optional", 0, is_int=True))
+
+    def check_opts(self):
         if self.google_map_type != "roadmap" and self.google_map_type != "satellite" and self.google_map_type != "terrain" and self.google_map_type != "hybrid":
             raise Exception("地图类型"+self.google_map_type+"是什么鬼？")
-        print ("google_map_type设置为: %s") % self.google_map_type
-
-        self.video_width = self.getint("required", "video_width")
-        print ("video_width设置为: %d") % self.video_width
-
-        self.video_height = self.getint("required", "video_height")
-        print ("video_height设置为: %d") % self.video_height
-
-        self.video_border = self.getint("required", "video_border")
-        print ("video_border设置为: %d") % self.video_border
 
         self.google_map_premium = self.get("optional", "google_map_premium", "no")
         if self.google_map_premium == "yes":
@@ -40,36 +70,51 @@ class gps2video_cf(ConfigParser.ConfigParser):
             self.google_map_premium = False
         else:
             raise Exception("你到底是不是google map premium，写清楚！")
-        print "google_map_premium 设置为:", self.google_map_premium
 
-        self.output_dir = self.get("optional", "output_dir", "./output/")
         if os.path.exists(self.output_dir) and not os.path.isdir(self.output_dir):
             raise Exception("输出目录"+self.output_dir+"不是目录，不好好设置信不信给你删了？")
         if not os.path.exists(self.output_dir):
             os.mkdir(self.output_dir)
-        print ("输出目录设置为: %s") % self.output_dir
 
-        self.line_color = self.get("optional", "line_color", "yellow")
-        print ("line_color设置为: %s") % self.line_color
+    def parse_cmd(self):
+        longopts = []
+        for opt in self.opts:
+            longopts.append(opt.option + "=")
+        cmd_opts, config_file_path = getopt.getopt(sys.argv[1:], "", longopts)
 
-        self.point_color = self.get("optional", "point_color", "white")
-        print ("point_color设置为: %s") % self.point_color
+        for arg, val in cmd_opts:
+            for opt in self.opts:
+                if "--" + opt.option == arg:
+                    if opt.is_int:
+                        val = int(val)
+                    setattr(self, opt.attr, val)
+                    break
 
-        self.font_color = self.get("optional", "font_color", "white")
-        print ("font_color设置为: %s") % self.font_color
+        if len(config_file_path) == 0:
+            self.config_file_path = "./config.ini"
+        else:
+            self.config_file_path = config_file_path[0]
 
-        self.video_fps = self.getint("optional", "video_fps", 60)
-        print ("video_fps为: %d") % self.video_fps
+    def parse_config(self):
+        print "配置文件为:", self.config_file_path
+        self.cfp = open(self.config_file_path)
+        ConfigParser.ConfigParser.__init__(self)
+        ConfigParser.ConfigParser.readfp(self, self.cfp)
 
-        self.speed = self.getint("optional", "speed", 1)
-        print ("绘制速率为: %dx") % self.speed
+        for opt in self.opts:
+            if not hasattr(self, opt.attr):
+                if opt.is_int:
+                    val = self.getint(opt.section, opt.option, opt.default)
+                else:
+                    val = self.get(opt.section, opt.option, opt.default)
+                setattr(self, opt.attr, val)
 
-        self.hide_head = self.getint("optional", "hide_head", 0)
-        print ("hide_head为: %d") % self.hide_head
-
-    def __del__(self):
-        if hasattr(self, 'cfp'):
-            self.cfp.close()
+    def show_opts(self):
+        for opt in self.opts:
+            if opt.is_int:
+                print ("%s设置为: %d") % (opt.show, getattr(self, opt.attr))
+            else:
+                print ("%s设置为: %s") % (opt.show, getattr(self, opt.attr))
 
     def has_option(self, section, option):
         if not ConfigParser.ConfigParser.has_option(self, section, option):
@@ -384,14 +429,21 @@ class video_class:
         self.pipe.wait()
         print "视频生成成功：", self.video_file
 
-def gps2video(config_file_path="config.ini"):
+def usage():
+    print "Usage:",sys.argv[0], "[options]", "[./config.ini]"
+    print "       [options]和[./config.ini]信息见example.ini"
+
+def gps2video():
     #配置对象cf初始化
     try:
-        cf = gps2video_cf(config_file_path)
+        cf = cf_class()
+    except getopt.GetoptError as e:
+        print "命令行出错：", e
+        usage()
+        return
     except Exception as e:
-        print config_file_path + "文件打开出错：", e
-        print "打开example.ini文件，对里面的配置信息进行修改后另存为"+config_file_path+"。"
-        print "不用担心不会配置，里面有中文注释。"
+        print "读取配置信息出错：", e
+        usage()
         return
 
     #轨迹对象gps初始化
