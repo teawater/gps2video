@@ -9,6 +9,8 @@ python gps2video.py
 然后按照输出做即可。
 ***
 更新记录：
+* 2017.08.31<br>
+  增加在视频中添加照片的功能。详见配置文件选项photos_dir，photos_timezone和photos_show_secs。
 * 2017.08.28<br>
   增加命令行配置功能。<br>
   增加把轨迹点替换为头像图片的功能。详见配置文件选项head_file和head_size。

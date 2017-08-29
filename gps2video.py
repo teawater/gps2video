@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os, sys, ConfigParser, gpxpy, math, urllib2, subprocess, copy, getopt
+import os, sys, ConfigParser, gpxpy, math, urllib2, subprocess, copy, getopt, datetime
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 class opt_class:
@@ -60,6 +60,9 @@ class cf_class(ConfigParser.ConfigParser):
         self.opts.append(opt_class("hide_head", "optional", 0, is_int=True))
         self.opts.append(opt_class("head_file", "optional", ""))
         self.opts.append(opt_class("head_size", "optional", 20, is_int=True))
+        self.opts.append(opt_class("photos_dir", "optional", ""))
+        self.opts.append(opt_class("photos_timezone", "optional", 8, is_int=True))
+        self.opts.append(opt_class("photos_show_secs", "optional", 2, is_int=True))
 
     def check_opts(self):
         if self.google_map_type != "roadmap" and self.google_map_type != "satellite" and self.google_map_type != "terrain" and self.google_map_type != "hybrid":
@@ -192,13 +195,15 @@ class gps_class:
                     c.track_walk_callback(point)
 
 class map_class:
-    def __init__(self, cf, gps):
+    def __init__(self, cf, gps, photos):
         self.cbk = [128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216, 33554432, 67108864, 134217728, 268435456, 536870912, 1073741824, 2147483648, 4294967296, 8589934592, 17179869184, 34359738368, 68719476736, 137438953472]
         self.cek = [0.7111111111111111, 1.4222222222222223, 2.8444444444444446, 5.688888888888889, 11.377777777777778, 22.755555555555556, 45.51111111111111, 91.02222222222223, 182.04444444444445, 364.0888888888889, 728.1777777777778, 1456.3555555555556, 2912.711111111111, 5825.422222222222, 11650.844444444445, 23301.68888888889, 46603.37777777778, 93206.75555555556, 186413.51111111112, 372827.02222222224, 745654.0444444445, 1491308.088888889, 2982616.177777778, 5965232.355555556, 11930464.711111112, 23860929.422222223, 47721858.844444446, 95443717.68888889, 190887435.37777779, 381774870.75555557, 763549741.5111111]
         self.cfk = [40.74366543152521, 81.48733086305042, 162.97466172610083, 325.94932345220167, 651.8986469044033, 1303.7972938088067, 2607.5945876176133, 5215.189175235227, 10430.378350470453, 20860.756700940907, 41721.51340188181, 83443.02680376363, 166886.05360752725, 333772.1072150545, 667544.214430109, 1335088.428860218, 2670176.857720436, 5340353.715440872, 10680707.430881744, 21361414.86176349, 42722829.72352698, 85445659.44705395, 170891318.8941079, 341782637.7882158, 683565275.5764316, 1367130551.1528633, 2734261102.3057265, 5468522204.611453, 10937044409.222906, 21874088818.445812, 43748177636.891624]
 
         self.gps = gps
         self.cf = cf
+        self.photos = photos
+
         self.prev_x = None
         self.prev_y = None
         self.prev_point = None
@@ -227,19 +232,6 @@ class map_class:
         print "缩放率是", self.zoom
 
         self.get_font()
-
-        if self.cf.head_file != "":
-            #头像初始化 self.head self.head_alpha
-            size = (self.cf.head_size, self.cf.head_size)
-            mask = Image.new('L', size, 0)
-            draw = ImageDraw.Draw(mask)
-            draw.ellipse((0, 0) + size, fill=255)
-            im = Image.open(self.cf.head_file)
-            self.head = ImageOps.fit(im, mask.size, centering=(0.5, 0.5))
-            self.head.putalpha(mask)
-            _, _, _, self.head_alpha = self.head.split()
-        else:
-            self.head = None
 
     #下面这两个函数取自 https://github.com/whit537/gheat/blob/master/__/lib/python/gmerc.py
     def gps_to_global_pixel(self, latitude, longitude):
@@ -393,6 +385,9 @@ class map_class:
             if self.prev_x != None and point != None:
                 self.draw.line([(self.prev_x, self.prev_y), (x, y)],
                                fill = self.cf.line_color, width = 3)
+                if self.photos.photos_paste(pipe, self.prev_point, point):
+                    self.photos.cameras_xy_add(self.prev_x, self.prev_y, x, y)
+                self.photos.cameras_paste(self.img)
             if write:
                 img = copy.deepcopy(self.img)
                 draw = ImageDraw.Draw(img)
@@ -400,12 +395,12 @@ class map_class:
                           self.get_move_info(point),
                           font = self.font,
                           fill = self.cf.font_color)
-                if self.head == None:
+                if self.photos.head == None:
                     draw.ellipse([(x - 5, y - 5), (x + 5, y + 5)],
                                  fill = self.cf.point_color)
                 else:
                     head_offset = self.cf.head_size / 2
-                    img.paste(self.head, box = (x - head_offset, y - head_offset), mask = self.head_alpha)
+                    img.paste(self.photos.head, box = (x - head_offset, y - head_offset), mask = self.photos.head_alpha)
                 img.save(pipe.stdin, 'PNG')
                 del(draw)
                 del(img)
@@ -414,6 +409,109 @@ class map_class:
             self.prev_x = x
             self.prev_y = y
             self.prev_point = point
+
+class photos_class:
+    def __init__(self, cf):
+        self.cf = cf
+
+        if self.cf.head_file != "":
+            #头像初始化 self.head self.head_alpha
+            size = (self.cf.head_size, self.cf.head_size)
+            mask = Image.new('L', size, 0)
+            draw = ImageDraw.Draw(mask)
+            draw.ellipse((0, 0) + size, fill=255)
+            im = Image.open(self.cf.head_file)
+            self.head = ImageOps.fit(im, mask.size, centering=(0.5, 0.5))
+            self.head.putalpha(mask)
+            _, _, _, self.head_alpha = self.head.split()
+        else:
+            self.head = None
+
+        self.photos = []
+        if self.cf.photos_dir != "":
+            if not os.path.exists(self.cf.photos_dir):
+                raise Exception(self.cf.photos_dir + "这个目录并不存在啊！")
+            if os.path.isdir(self.cf.photos_dir):
+                for photo in os.listdir(self.cf.photos_dir):
+                    self.photos_append(os.path.join(self.cf.photos_dir, photo))
+                self.photos.sort()
+            else:
+                self.photos_append(self.cf.photos_dir)
+
+        #Init camera
+        if len(self.photos) > 0:
+            self.camera = Image.open("./camera.png").convert("RGBA").resize((20,20),Image.ANTIALIAS)
+            _, _, _, self.camera_alpha = self.camera.split()
+        self.cameras_xy = []
+
+    def photos_append(self, photo):
+        try:
+            d = datetime.datetime.strptime(Image.open(photo)._getexif()[36867], "%Y:%m:%d %H:%M:%S")
+            d -= datetime.timedelta(hours = self.cf.photos_timezone)
+        except Exception as e:
+            print "读取文件" + photo + "出错：", e
+            print "此文件被跳过。"
+            return
+        self.photos.append((d, photo))
+
+    def photos_paste(self, pipe, prev_point, point):
+        show_camera = False
+
+        while len(self.photos) != 0:
+            (d, photo) = self.photos[0]
+            if d < prev_point.time:
+                self.photos.pop(0)
+                continue
+            if d > point.time:
+                return show_camera
+            print "插入图片:", photo
+            image = Image.open(photo).convert("RGBA")
+            image = image.resize(self.get_fit_size(image.size), Image.ANTIALIAS)
+            x_expand = (self.cf.video_width - image.size[0]) / 2
+            y_expand = (self.cf.video_height - image.size[1]) / 2
+            image = ImageOps.expand(image, (x_expand,y_expand,x_expand,y_expand), fill="white")
+            for i in range(self.cf.video_fps * self.cf.photos_show_secs):
+                image.save(pipe.stdin, 'PNG')
+            self.photos.pop(0)
+            show_camera = True
+
+        return show_camera
+
+    def cameras_xy_add(self, prev_x, prev_y, x, y):
+        middle_x = (max(prev_x, x) - min(prev_x, x)) / 2 + min(prev_x, x)
+        middle_y = (max(prev_y, y) - min(prev_y, y)) / 2 + min(prev_y, y)
+        x_offset = self.camera.size[0] / 2
+        y_offset = self.camera.size[1] / 2
+        x = middle_x - x_offset
+        y = middle_y - y_offset
+        self.cameras_xy.append((x, y))
+
+    def cameras_paste(self, image):
+        for box in self.cameras_xy:
+            image.paste(self.camera, box = box, mask = self.camera_alpha)
+
+    def get_fit_size(self, size):
+        x = float(size[0])
+        y = float(size[1])
+
+        #Try x
+        if x > self.cf.video_width:
+            new_x = self.cf.video_width
+            new_y = new_x / x * y
+        else:
+            new_x = x
+            new_y = y
+        if new_y <= self.cf.video_height:
+            return (int(new_x), int(new_y))
+
+        #Try y
+        if y > self.cf.video_height:
+            new_y = self.cf.video_height
+            new_x = new_y / y * x
+        else:
+            new_y = y
+            new_x = x
+        return (int(new_x), int(new_y))
 
 class video_class:
     def __init__(self, cf):
@@ -467,8 +565,11 @@ def gps2video():
     #轨迹对象gps初始化
     gps = gps_class(cf)
 
+    #照片类初始化
+    photos = photos_class(cf)
+
     #地图对象map初始化
-    m = map_class(cf, gps)
+    m = map_class(cf, gps, photos)
 
     #下载地图
     m.get_map()
