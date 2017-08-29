@@ -65,7 +65,6 @@ class cf_class(ConfigParser.ConfigParser):
         if self.google_map_type != "roadmap" and self.google_map_type != "satellite" and self.google_map_type != "terrain" and self.google_map_type != "hybrid":
             raise Exception("地图类型"+self.google_map_type+"是什么鬼？")
 
-        self.google_map_premium = self.get("optional", "google_map_premium", "no")
         if self.google_map_premium == "yes":
             self.google_map_premium = True
         elif self.google_map_premium == "no":
