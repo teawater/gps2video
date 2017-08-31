@@ -57,7 +57,7 @@ class cf_class(ConfigParser.ConfigParser):
         self.opts.append(opt_class("font_color", "optional", "white"))
         self.opts.append(opt_class("video_fps", "optional", 60, is_int=True))
         self.opts.append(opt_class("speed", "optional", 1, is_int=True, show="绘制速率"))
-        self.opts.append(opt_class("hide_head", "optional", 0, is_int=True))
+        self.opts.append(opt_class("hide_begin", "optional", 0, is_int=True))
         self.opts.append(opt_class("head_file", "optional", ""))
         self.opts.append(opt_class("head_size", "optional", 20, is_int=True))
         self.opts.append(opt_class("photos_dir", "optional", ""))
@@ -176,7 +176,7 @@ class gps_class:
                     if prev_point != None:
                         distance += self.get_distance(prev_point, point)
                     prev_point = point
-                    if distance < self.cf.hide_head:
+                    if distance < self.cf.hide_begin:
                         continue
 
                     if self.max_latitude == None or point.latitude > self.max_latitude:
@@ -376,7 +376,7 @@ class map_class:
             x, y = self.prev_x, self.prev_y
 
         self.inc_distance(self.prev_point, point)
-        if self.distance >= self.cf.hide_head:
+        if self.distance >= self.cf.hide_begin:
             self.not_write_distance += self.gps.get_distance(self.prev_point, point)
             self.not_write_secs += self.get_secs(self.prev_point, point)
             if write:
