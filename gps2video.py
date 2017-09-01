@@ -55,6 +55,7 @@ class cf_class(ConfigParser.ConfigParser):
         self.opts.append(opt_class("line_color", "optional", "yellow"))
         self.opts.append(opt_class("point_color", "optional", "white"))
         self.opts.append(opt_class("font_color", "optional", "white"))
+        self.opts.append(opt_class("video_codec", "optional", "libx264"))
         self.opts.append(opt_class("video_fps", "optional", 60, is_int=True))
         self.opts.append(opt_class("speed", "optional", 1, is_int=True, show="绘制速率"))
         self.opts.append(opt_class("hide_begin", "optional", 0, is_int=True))
@@ -524,7 +525,8 @@ class video_class:
                            '-r', str(self.cf.video_fps),  # FPS
                            '-i', '-',  # Indicated input comes from pipe 
                            '-q:v', '1',
-                           '-c:v', 'mpeg4',
+                           '-c:v', self.cf.video_codec,
+                           '-pix_fmt', 'yuv420p',
                            '-y', #Overwrite old file
                            self.video_file]
 
