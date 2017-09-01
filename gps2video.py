@@ -1,16 +1,21 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os, sys, ConfigParser, gpxpy, math, urllib2, subprocess, copy, getopt, datetime, errno
+import os, sys, ConfigParser, gpxpy, math, urllib2, subprocess, copy, getopt, datetime, errno, enum
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
+class opt_type(enum.Enum):
+    Str = 1
+    Int = 2
+    Bool = 3
+
 class opt_class:
-    def __init__(self, attr, section = None, default = None, is_int = False, option = None, show = None):
+    def __init__(self, attr, section = None, default = None, t = opt_type.Str, option = None, show = None):
         """
         :param attr: 读取成功后，对象cf_class中元素名称。
         :param section: 配置文件section，如果设置为None则不会扫描配置文件。
         :param default: 这个参数的默认值，如果为None的没设置这个attr会报错。
-        :param is_int: 为True则这个参数是int。
+        :param t: 指定了这个参数的类型。
         :param option: 配置文件option和命令行的，如果设置为None则同attr。
         :param show: 用来显示的名称，显示的时候用，如果设置为None则同attr。
         """
@@ -21,11 +26,26 @@ class opt_class:
         else:
             self.option = attr
         self.default = default
-        self.is_int = is_int
+        self.t = t
         if show != None:
             self.show = show
         else:
             self.show = attr
+
+    def convert(self, str_val):
+        if self.t == opt_type.Int:
+            val = int(str_val)
+        elif self.t == opt_type.Bool:
+            val = str_val.lower()
+            if val == "yes" or val == "true":
+                val = True
+            elif val == "no" or val == "false":
+                val = False
+            else:
+                raise Exception(self.show + "设置的" + str_val + "是什么鬼？")
+        else:
+            val = str_val
+        return val
 
 class cf_class(ConfigParser.ConfigParser):
     def __init__(self):
@@ -46,35 +66,28 @@ class cf_class(ConfigParser.ConfigParser):
         self.opts.append(opt_class("gps_file", "required"))
         self.opts.append(opt_class("google_map_key", "required"))
         self.opts.append(opt_class("google_map_type", "required"))
-        self.opts.append(opt_class("video_width", "required", is_int=True))
-        self.opts.append(opt_class("video_height", "required", is_int=True))
-        self.opts.append(opt_class("video_border", "required", is_int=True))
+        self.opts.append(opt_class("video_width", "required", t=opt_type.Int))
+        self.opts.append(opt_class("video_height", "required", t=opt_type.Int))
+        self.opts.append(opt_class("video_border", "required", t=opt_type.Int))
 
-        self.opts.append(opt_class("google_map_premium", "optional", "no"))
+        self.opts.append(opt_class("google_map_premium", "optional", False, t=opt_type.Bool))
         self.opts.append(opt_class("output_dir", "optional", "./output/"))
         self.opts.append(opt_class("line_color", "optional", "yellow"))
         self.opts.append(opt_class("point_color", "optional", "white"))
         self.opts.append(opt_class("font_color", "optional", "white"))
         self.opts.append(opt_class("video_codec", "optional", "libx264"))
-        self.opts.append(opt_class("video_fps", "optional", 60, is_int=True))
-        self.opts.append(opt_class("speed", "optional", 1, is_int=True, show="绘制速率"))
-        self.opts.append(opt_class("hide_begin", "optional", 0, is_int=True))
+        self.opts.append(opt_class("video_fps", "optional", 60, t=opt_type.Int))
+        self.opts.append(opt_class("speed", "optional", 1, t=opt_type.Int, show="绘制速率"))
+        self.opts.append(opt_class("hide_begin", "optional", 0, t=opt_type.Int))
         self.opts.append(opt_class("head_file", "optional", ""))
-        self.opts.append(opt_class("head_size", "optional", 20, is_int=True))
+        self.opts.append(opt_class("head_size", "optional", 20, t=opt_type.Int))
         self.opts.append(opt_class("photos_dir", "optional", ""))
-        self.opts.append(opt_class("photos_timezone", "optional", 8, is_int=True))
-        self.opts.append(opt_class("photos_show_secs", "optional", 2, is_int=True))
+        self.opts.append(opt_class("photos_timezone", "optional", 8, t=opt_type.Int))
+        self.opts.append(opt_class("photos_show_secs", "optional", 2, t=opt_type.Int))
 
     def check_opts(self):
         if self.google_map_type != "roadmap" and self.google_map_type != "satellite" and self.google_map_type != "terrain" and self.google_map_type != "hybrid":
             raise Exception("地图类型"+self.google_map_type+"是什么鬼？")
-
-        if self.google_map_premium == "yes":
-            self.google_map_premium = True
-        elif self.google_map_premium == "no":
-            self.google_map_premium = False
-        else:
-            raise Exception("你到底是不是google map premium，写清楚！")
 
         if os.path.exists(self.output_dir) and not os.path.isdir(self.output_dir):
             raise Exception("输出目录"+self.output_dir+"不是目录，不好好设置信不信给你删了？")
@@ -90,9 +103,7 @@ class cf_class(ConfigParser.ConfigParser):
         for arg, val in cmd_opts:
             for opt in self.opts:
                 if "--" + opt.option == arg:
-                    if opt.is_int:
-                        val = int(val)
-                    setattr(self, opt.attr, val)
+                    setattr(self, opt.attr, opt.convert(val))
                     break
 
         if len(config_file_path) == 0:
@@ -108,41 +119,27 @@ class cf_class(ConfigParser.ConfigParser):
 
         for opt in self.opts:
             if not hasattr(self, opt.attr):
-                if opt.is_int:
-                    val = self.getint(opt.section, opt.option, opt.default)
-                else:
-                    val = self.get(opt.section, opt.option, opt.default)
-                setattr(self, opt.attr, val)
+                setattr(self, opt.attr, self.get_opt(opt))
 
     def show_opts(self):
         for opt in self.opts:
-            if opt.is_int:
-                print ("%s设置为: %d") % (opt.show, getattr(self, opt.attr))
-            else:
-                print ("%s设置为: %s") % (opt.show, getattr(self, opt.attr))
+            print ("%s设置为: %s") % (opt.show, str(getattr(self, opt.attr)))
 
-    def has_option(self, section, option):
-        if not ConfigParser.ConfigParser.has_option(self, section, option):
+    def has_option(self, opt):
+        if not ConfigParser.ConfigParser.has_option(self, opt.section, opt.option):
             return False
-        if ConfigParser.ConfigParser.get(self, section, option) == "":
+        if ConfigParser.ConfigParser.get(self, opt.section, opt.option) == "":
             return False
         return True
 
-    def get(self, section, option, default = None):
-        if not self.has_option(section, option):
-            if default == None:
-                raise Exception(section+"中的项目"+option+"没设置啊！")
+    def get_opt(self, opt):
+        if not self.has_option(opt):
+            if opt.default == None:
+                raise Exception(opt.section+"中的项目"+opt.option+"没设置啊！")
             else:
-                return default
-        return ConfigParser.ConfigParser.get(self, section, option)
-
-    def getint(self, section, option, default = None):
-        if not self.has_option(section, option):
-            if default == None:
-                raise Exception(section+"中的项目"+option+"没设置啊！")
-            else:
-                return default
-        return ConfigParser.ConfigParser.getint(self, section, option)
+                return opt.default
+        val = ConfigParser.ConfigParser.get(self, opt.section, opt.option)
+        return opt.convert(val)
 
 class gps_class:
     def __init__(self, cf):
