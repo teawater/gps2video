@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os, sys, ConfigParser, gpxpy, math, urllib2, subprocess, copy, getopt, datetime
+import os, sys, ConfigParser, gpxpy, math, urllib2, subprocess, copy, getopt, datetime, errno
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 class opt_class:
@@ -290,15 +290,20 @@ class map_class:
 
     def get_map(self):
         url = "https://maps.googleapis.com/maps/api/staticmap?format=png"
-        url += "&key=" + self.cf.google_map_key
         url += "&center=" + str(self.center_latitude) + "," + str(self.center_longitude)
         url += "&zoom=" + str(self.zoom)
         url += "&size=" + str(self.cf.video_width) + "x" + str(self.cf.video_height)
         url += "&maptype=" + self.cf.google_map_type
+        url += "&key=" + self.cf.google_map_key
         print "将从下面的地址下载地图："
         print url
 
         self.pic = os.path.join(self.cf.output_dir, "base.png")
+        try:
+            os.remove(self.pic)
+        except OSError, (error, message):
+            if error != errno.ENOENT:
+                raise OSError, (error, message)
 
         ufp = urllib2.urlopen(url = url, timeout = 10)
         fp = open(self.pic, "wb")
