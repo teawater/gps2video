@@ -12,6 +12,7 @@ python gps2video.py
 * 2017.09.01<br>
   增加视频解码器设置功能，并将默认值设置为libx264，详见配置文件选项video_codec。
   增加自动复用上次地图的功能，详见配置文件选项map_cache。
+  增加设置结尾轨迹信息图显示秒数的功能，详见配置文件选项trackinfo_show_sec。
 * 2017.08.31<br>
   增加在视频中添加照片的功能。详见配置文件选项photos_dir，photos_timezone和photos_show_secs。<br>
   把用来隐藏开头若干距离的轨迹的项目hide_head重命名为hide_begin。

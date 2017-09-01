@@ -85,6 +85,7 @@ class cf_class(ConfigParser.ConfigParser):
         self.opts.append(opt_class("photos_timezone", "optional", 8, t=opt_type.Int))
         self.opts.append(opt_class("photos_show_secs", "optional", 2, t=opt_type.Int))
         self.opts.append(opt_class("map_cache", "optional", True, t=opt_type.Bool))
+        self.opts.append(opt_class("trackinfo_show_sec", "optional", 2, t=opt_type.Int))
 
     def check_opts(self):
         if self.google_map_type != "roadmap" and self.google_map_type != "satellite" and self.google_map_type != "terrain" and self.google_map_type != "hybrid":
@@ -567,7 +568,7 @@ class video_class:
         self.track_walk_callback = self.write_one_point
         gps.track_walk(self)
         #全部输出结束后停留2秒
-        for i in range(self.cf.video_fps * 2):
+        for i in range(self.cf.video_fps * self.cf.trackinfo_show_sec):
             m.write_one_point(self.pipe)
         self.pipe.stdin.close()
         self.pipe.wait()
