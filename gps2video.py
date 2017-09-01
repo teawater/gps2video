@@ -84,6 +84,7 @@ class cf_class(ConfigParser.ConfigParser):
         self.opts.append(opt_class("photos_dir", "optional", ""))
         self.opts.append(opt_class("photos_timezone", "optional", 8, t=opt_type.Int))
         self.opts.append(opt_class("photos_show_secs", "optional", 2, t=opt_type.Int))
+        self.opts.append(opt_class("map_cache", "optional", True, t=opt_type.Bool))
 
     def check_opts(self):
         if self.google_map_type != "roadmap" and self.google_map_type != "satellite" and self.google_map_type != "terrain" and self.google_map_type != "hybrid":
@@ -285,32 +286,55 @@ class map_class:
         y = int(round(gy - self.center_gy + self.center_y))
         return x, y
 
+    def remove(self, f):
+        try:
+            os.remove(f)
+        except OSError, (error, message):
+            if error != errno.ENOENT:
+                raise OSError, (error, message)
+
     def get_map(self):
         url = "https://maps.googleapis.com/maps/api/staticmap?format=png"
         url += "&center=" + str(self.center_latitude) + "," + str(self.center_longitude)
         url += "&zoom=" + str(self.zoom)
         url += "&size=" + str(self.cf.video_width) + "x" + str(self.cf.video_height)
         url += "&maptype=" + self.cf.google_map_type
+        current_url = url
         url += "&key=" + self.cf.google_map_key
         print "将从下面的地址下载地图："
         print url
 
-        self.pic = os.path.join(self.cf.output_dir, "base.png")
-        try:
-            os.remove(self.pic)
-        except OSError, (error, message):
-            if error != errno.ENOENT:
-                raise OSError, (error, message)
+        pic_file = os.path.join(self.cf.output_dir, "base.png")
+        url_file = os.path.join(self.cf.output_dir, "base.url")
+
+        if self.cf.map_cache:
+            self.img = None
+            try:
+                if open(url_file, "r").read() == current_url:
+                    self.img = Image.open(pic_file).convert("RGBA")
+                    self.draw = ImageDraw.Draw(self.img)
+            except:
+                self.img = None
+            if self.img != None:
+                print "直接使用之前的地图文件。"
+                return
+
+        self.remove(pic_file)
+        self.remove(url_file)
 
         ufp = urllib2.urlopen(url = url, timeout = 10)
-        fp = open(self.pic, "wb")
+        fp = open(pic_file, "wb")
         fp.write(ufp.read())
         fp.close()
         ufp.close()
 
-        self.img = Image.open(self.pic)
-        self.img = self.img.convert("RGBA")
+        self.img = Image.open(pic_file).convert("RGBA")
         self.draw = ImageDraw.Draw(self.img)
+
+        if self.cf.map_cache:
+            fp = open(url_file, "w")
+            fp.write(current_url)
+            fp.close()
 
     def get_secs(self, p1, p2):
         if p1 == None or p2 == None:
