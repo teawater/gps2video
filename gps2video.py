@@ -489,7 +489,7 @@ class photos_class:
             print "读取文件" + photo + "出错：", e
             print "此文件被跳过。"
             return
-        if d < self.gps.begin.time or d > self.gps.begin.time:
+        if d < self.gps.begin.time or d > self.gps.end.time:
             print "文件" + photo + "不在轨迹范围内"
             print "此文件被跳过。"
         else:
