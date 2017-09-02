@@ -72,6 +72,7 @@ class cf_class(ConfigParser.ConfigParser):
 
         self.opts.append(opt_class("google_map_premium", "optional", False, t=opt_type.Bool))
         self.opts.append(opt_class("output_dir", "optional", "./output/"))
+        self.opts.append(opt_class("video_limit_secs", "optional", 0, t=opt_type.Int))
         self.opts.append(opt_class("line_color", "optional", "yellow"))
         self.opts.append(opt_class("point_color", "optional", "white"))
         self.opts.append(opt_class("font_color", "optional", "white"))
@@ -148,7 +149,7 @@ class gps_class:
         self.cf = cf
         self.gfp = open(cf.gps_file)
         self.rec = gpxpy.parse(self.gfp)
-        self.get_max_min()
+        self.get_max_min_count_begin_end()
 
     def __del__(self):
         if hasattr(self, 'gfp'):
@@ -163,11 +164,14 @@ class gps_class:
             distance = p2.distance_2d(p1)
         return distance
 
-    def get_max_min(self):
+    def get_max_min_count_begin_end(self):
         self.max_latitude = None
         self.min_latitude = None
         self.max_longitude = None
         self.min_longitude = None
+        self.count = 0
+        self.begin = None
+        self.end = None
         for track in self.rec.tracks:
             for segment in track.segments:
                 prev_point = None
@@ -179,6 +183,10 @@ class gps_class:
                     if distance < self.cf.hide_begin:
                         continue
 
+                    if self.begin == None:
+                        self.begin = point
+                    self.end = point
+                    self.count += 1
                     if self.max_latitude == None or point.latitude > self.max_latitude:
                         self.max_latitude = point.latitude
                     if self.min_latitude == None or point.latitude < self.min_latitude:
@@ -439,8 +447,9 @@ class map_class:
             self.prev_point = point
 
 class photos_class:
-    def __init__(self, cf):
+    def __init__(self, cf, gps):
         self.cf = cf
+        self.gps = gps
 
         if self.cf.head_file != "":
             #头像初始化 self.head self.head_alpha
@@ -480,7 +489,11 @@ class photos_class:
             print "读取文件" + photo + "出错：", e
             print "此文件被跳过。"
             return
-        self.photos.append((d, photo))
+        if d < self.gps.begin.time or d > self.gps.begin.time:
+            print "文件" + photo + "不在轨迹范围内"
+            print "此文件被跳过。"
+        else:
+            self.photos.append((d, photo))
 
     def photos_paste(self, pipe, prev_point, point):
         show_camera = False
@@ -542,8 +555,13 @@ class photos_class:
         return (int(new_x), int(new_y))
 
 class video_class:
-    def __init__(self, cf):
+    def __init__(self, cf, gps, m, photos):
         self.cf = cf
+        self.gps = gps
+        self.m = m
+        self.photos = photos
+
+        self.handle_video_limit_secs()
 
         self.video_file = os.path.join(cf.output_dir, 'v.mp4')
         self.ffmpeg_cmd = [cf.ffmpeg,
@@ -557,19 +575,59 @@ class video_class:
                            '-y', #Overwrite old file
                            self.video_file]
 
+    def get_video_secs(self):
+        pic_count = (self.gps.count - 1) / self.cf.speed
+        secs = pic_count / self.cf.video_fps
+        if pic_count % self.cf.video_fps > 0:
+            secs += 1
+        secs += len(self.photos.photos) * self.cf.photos_show_secs
+        secs += self.cf.trackinfo_show_sec
+        return secs
+
+    def handle_video_limit_secs(self):
+        if self.cf.video_limit_secs == 0 or self.get_video_secs() <= self.cf.video_limit_secs:
+            return
+
+        if self.cf.video_limit_secs <= len(self.photos.photos) * self.cf.photos_show_secs + self.cf.trackinfo_show_sec:
+            if self.cf.photos_show_secs > 1:
+                self.cf.photos_show_secs = 1
+                print "选项photos_show_secs设置为1"
+            if self.cf.video_limit_secs <= len(self.photos.photos) * self.cf.photos_show_secs + self.cf.trackinfo_show_sec:
+                    if self.cf.trackinfo_show_sec > 1:
+                        self.cf.trackinfo_show_sec = 1
+                        print "选项trackinfo_show_sec设置为1"
+                        if self.cf.video_limit_secs <= len(self.photos.photos) * self.cf.photos_show_secs + self.cf.trackinfo_show_sec:
+                            raise Exception("video_limit_secs设置的太小，加入的图片又太多 ，支持不了！")
+
+        if self.get_video_secs() <= self.cf.video_limit_secs:
+            return
+
+        if self.cf.video_fps < 60:
+            self.cf.video_fps = 60
+            print "选项video_fps设置为60"
+
+        if self.get_video_secs() <= self.cf.video_limit_secs:
+            return
+
+        track_secs = self.cf.video_limit_secs - len(self.photos.photos) * self.cf.photos_show_secs - self.cf.trackinfo_show_sec
+        pic_show_count = track_secs * self.cf.video_fps
+        self.cf.speed = (self.gps.count - 1) / pic_show_count
+        if (self.gps.count - 1) % pic_show_count > 0:
+            self.cf.speed += 1
+        print "选项speed设置为",self.cf.speed
+
     def write_one_point(self, point):
         self.m.write_one_point(self.pipe, self.point_count % self.cf.speed == 0, point)
         self.point_count += 1
 
-    def generate(self, m, gps):
-        self.m = m
+    def generate(self):
         self.pipe = subprocess.Popen(self.ffmpeg_cmd, stdin=subprocess.PIPE)
         self.point_count = 0
         self.track_walk_callback = self.write_one_point
-        gps.track_walk(self)
+        self.gps.track_walk(self)
         #全部输出结束后停留2秒
         for i in range(self.cf.video_fps * self.cf.trackinfo_show_sec):
-            m.write_one_point(self.pipe)
+            self.m.write_one_point(self.pipe)
         self.pipe.stdin.close()
         self.pipe.wait()
         print "视频生成成功：", self.video_file
@@ -595,7 +653,7 @@ def gps2video():
     gps = gps_class(cf)
 
     #照片类初始化
-    photos = photos_class(cf)
+    photos = photos_class(cf, gps)
 
     #地图对象map初始化
     m = map_class(cf, gps, photos)
@@ -604,10 +662,10 @@ def gps2video():
     m.get_map()
 
     #视频类初始化
-    video = video_class(cf)
+    video = video_class(cf, gps, m, photos)
 
     #视频生成
-    video.generate(m, gps)
+    video.generate()
 
 if __name__ == "__main__":
     gps2video()
