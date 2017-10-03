@@ -1,6 +1,7 @@
 gps2video是一个用来将GPS轨迹转化为视频的软件。
 ***
 ```
+sudo apt-get install ffmpeg
 sudo pip install gpxpy urllib2 pillow
 git clone https://github.com/teawater/gps2video.git
 cd gps2video
