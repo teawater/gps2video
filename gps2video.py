@@ -279,15 +279,16 @@ class map_class:
         self.max_font_height = (self.cf.video_height - (max_y - min_y))/2
 
     def get_font(self):
+        font_dir = os.path.join(os.path.split(os.path.realpath(__file__))[0], "DroidSansFallback.ttf")
         for size in range(1, self.size_max):
-            font = ImageFont.truetype('./DroidSansFallback.ttf', size = size)
+            font = ImageFont.truetype(font_dir, size = size)
             width, height = font.getsize(u'距离:999.99公里 时间:23小时59分59秒 当前速度:23小时59分59秒/公里')
             if width >= self.cf.video_width or height >= self.max_font_height:
                 break
         if size != 1:
             size -= 1
         print "字体大小是", size
-        self.font = ImageFont.truetype('./DroidSansFallback.ttf', size = size)
+        self.font = ImageFont.truetype(font_dir, size = size)
 
     def gps_to_pixel(self, latitude, longitude):
         gx, gy = self.gps_to_global_pixel(latitude, longitude)
