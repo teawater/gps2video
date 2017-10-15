@@ -7,7 +7,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 class opt_type(enum.Enum):
     Str = 1
     Int = 2
-    Bool = 3
+    Float = 3
+    Bool = 4
 
 class opt_class:
     def __init__(self, attr, section = None, default = None, t = opt_type.Str, option = None, show = None):
@@ -35,6 +36,8 @@ class opt_class:
     def convert(self, str_val):
         if self.t == opt_type.Int:
             val = int(str_val)
+        elif self.t == opt_type.Float:
+            val = float(str_val)
         elif self.t == opt_type.Bool:
             val = str_val.lower()
             if val == "yes" or val == "true":
@@ -83,7 +86,7 @@ class cf_class(ConfigParser.ConfigParser):
         self.opts.append(opt_class("head_file", "optional", ""))
         self.opts.append(opt_class("head_size", "optional", 20, t=opt_type.Int))
         self.opts.append(opt_class("photos_dir", "optional", ""))
-        self.opts.append(opt_class("photos_timezone", "optional", 8, t=opt_type.Int))
+        self.opts.append(opt_class("photos_timezone", "optional", 8.0, t=opt_type.Float))
         self.opts.append(opt_class("photos_show_secs", "optional", 2, t=opt_type.Int))
         self.opts.append(opt_class("map_cache", "optional", True, t=opt_type.Bool))
         self.opts.append(opt_class("trackinfo_show_sec", "optional", 2, t=opt_type.Int))
