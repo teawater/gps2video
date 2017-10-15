@@ -131,12 +131,15 @@ class cf_class(ConfigParser.ConfigParser):
         for opt in self.opts:
             print ("%s设置为: %s") % (opt.show, str(getattr(self, opt.attr)))
 
-    def has_option(self, opt):
-        if not ConfigParser.ConfigParser.has_option(self, opt.section, opt.option):
+    def has_option1(self, section, option):
+        if not ConfigParser.ConfigParser.has_option(self, section, option):
             return False
-        if ConfigParser.ConfigParser.get(self, opt.section, opt.option) == "":
+        if ConfigParser.ConfigParser.get(self, section, option) == "":
             return False
         return True
+
+    def has_option(self, opt):
+        return self.has_option1(opt.section, opt.option)
 
     def get_opt(self, opt):
         if not self.has_option(opt):
@@ -146,6 +149,19 @@ class cf_class(ConfigParser.ConfigParser):
                 return opt.default
         val = ConfigParser.ConfigParser.get(self, opt.section, opt.option)
         return opt.convert(val)
+
+    def photo_daytime(self, photo):
+        photo = os.path.basename(photo)
+        if photo == "required" or photo == "optional":
+            return None
+        if not self.has_option1(photo, "created_at"):
+            return None
+        str = ConfigParser.ConfigParser.get(self, photo, "created_at")
+        try:
+            d = datetime.datetime.strptime(str, "%Y:%m:%d %H:%M:%S")
+        except:
+            d = None
+        return d
 
 class gps_class:
     def __init__(self, cf):
@@ -486,13 +502,17 @@ class photos_class:
         self.cameras_xy = []
 
     def photos_append(self, photo):
-        try:
-            d = datetime.datetime.strptime(Image.open(photo)._getexif()[36867], "%Y:%m:%d %H:%M:%S")
-            d -= datetime.timedelta(hours = self.cf.photos_timezone)
-        except Exception as e:
-            print "读取文件" + photo + "出错：", e
-            print "此文件被跳过。"
-            return
+        #Try to get d from config file
+        d = self.cf.photo_daytime(photo)
+        #Try to get d from exif
+        if d == None:
+            try:
+                d = datetime.datetime.strptime(Image.open(photo)._getexif()[36867], "%Y:%m:%d %H:%M:%S")
+                d -= datetime.timedelta(hours = self.cf.photos_timezone)
+            except Exception as e:
+                print "读取文件" + photo + "出错：", e
+                print "此文件被跳过。"
+                return
         if d < self.gps.begin.time or d > self.gps.end.time:
             print "文件" + photo + "不在轨迹范围内"
             print "此文件被跳过。"
