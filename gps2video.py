@@ -622,7 +622,13 @@ class video_class:
                         self.cf.trackinfo_show_sec = 1
                         print "选项trackinfo_show_sec设置为1"
                         if self.cf.video_limit_secs <= len(self.photos.photos) * self.cf.photos_show_secs + self.cf.trackinfo_show_sec:
-                            raise Exception("video_limit_secs设置的太小，加入的图片又太多 ，支持不了！")
+                            num = (self.cf.video_limit_secs - self.cf.trackinfo_show_sec - 1) /  self.cf.trackinfo_show_sec
+                            drop = len(self.photos.photos) - num
+                            del_offset = offset = num / drop
+                            while len(self.photos.photos) > num:
+                                print "跳过图片", self.photos.photos[del_offset][1], "因为图片太多，而video_limit_secs太小了。"
+                                del self.photos.photos[del_offset]
+                                del_offset += offset
 
         if self.get_video_secs() <= self.cf.video_limit_secs:
             return
