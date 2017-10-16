@@ -58,6 +58,7 @@ class cf_class(ConfigParser.ConfigParser):
         self.parse_config()
         self.check_opts()
         self.show_opts()
+        self.script_dir = os.path.split(os.path.realpath(__file__))[0]
 
     def __del__(self):
         if hasattr(self, 'cfp'):
@@ -298,7 +299,7 @@ class map_class:
         self.max_font_height = (self.cf.video_height - (max_y - min_y))/2
 
     def get_font(self):
-        font_dir = os.path.join(os.path.split(os.path.realpath(__file__))[0], "DroidSansFallback.ttf")
+        font_dir = os.path.join(self.cf.script_dir, "DroidSansFallback.ttf")
         for size in range(1, self.size_max):
             font = ImageFont.truetype(font_dir, size = size)
             width, height = font.getsize(u'距离:999.99公里 时间:23小时59分59秒 当前速度:23小时59分59秒/公里')
@@ -497,7 +498,7 @@ class photos_class:
 
         #Init camera
         if len(self.photos) > 0:
-            self.camera = Image.open("./camera.png").convert("RGBA").resize((20,20),Image.ANTIALIAS)
+            self.camera = Image.open(os.path.join(self.cf.script_dir,"./camera.png")).convert("RGBA").resize((20,20),Image.ANTIALIAS)
             _, _, _, self.camera_alpha = self.camera.split()
         self.cameras_xy = []
 
